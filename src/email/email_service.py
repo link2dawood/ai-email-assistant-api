@@ -1,0 +1,22 @@
+from src.prisma.database import get_db
+from src.prisma.models import EmailCreate
+from datetime import datetime
+
+class EmailService:
+    async def create_email(self, user_id, email_data: EmailCreate):
+        data = email_data.dict()
+        data["user_id"] = user_id
+        data["created_at"] = datetime.utcnow()
+        data["status"] = "sent"
+        res = await get_db().emails.insert_one(data)
+        return str(res.inserted_id)
+
+    async def get_emails(self, user_id, limit=20):
+        cursor = get_db().emails.find({"user_id": user_id}).limit(limit)
+        emails = await cursor.to_list(length=limit)
+        # Convert ObjectId to str for response
+        for email in emails:
+            email["id"] = str(email.pop("_id"))
+        return emails
+
+email_service = EmailService()
