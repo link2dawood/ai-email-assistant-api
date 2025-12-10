@@ -1,11 +1,8 @@
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
-from contextlib import asynccontextmanager
-
-# ---------------------------------------------------------
-# FIX: Change 'app.config' to 'src.config'
-# ---------------------------------------------------------
-from src.config import settings 
+from src.config import settings
+import ssl
+import certifi
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +13,28 @@ class Database:
     async def connect_db(self):
         try:
             logger.info(f"Connecting to MongoDB: {settings.mongodb_uri}")
-            self.client = AsyncIOMotorClient(settings.mongodb_uri)
+            
+            # Create SSL context that doesn't verify certificates
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
+            # Connect
+            self.client = AsyncIOMotorClient(
+                settings.mongodb_uri,
+                serverSelectionTimeoutMS=30000,
+                connectTimeoutMS=30000,
+                tlsAllowInvalidCertificates=True,
+            )
+            
             # Verify connection
             await self.client.admin.command('ping')
+            logger.info("✓ MongoDB connected successfully")
+            
+            # Get database
             self.db = self.client[settings.database_name]
-            print("✓ MongoDB connected")
+            logger.info(f"✓ Database '{settings.database_name}' selected")
+            
         except Exception as e:
             logger.error(f"✗ MongoDB connection failed: {str(e)}")
             raise
@@ -28,13 +42,16 @@ class Database:
     async def disconnect_db(self):
         if self.client:
             self.client.close()
-            print("✓ MongoDB disconnected")
+            logger.info("✓ MongoDB disconnected")
 
-# Create a global instance
+    async def create_indexes(self):
+        # ... (keep your index creation logic here) ...
+        pass
+
+# Create global database instance
 db_instance = Database()
 
 def get_db():
-    """Helper to get the database instance in other files"""
     return db_instance.db
 
 async def connect_db():

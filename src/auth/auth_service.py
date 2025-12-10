@@ -1,9 +1,9 @@
-# FILE: src/auth/auth_service.py
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 from fastapi import HTTPException, status, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+# IMPORTANT: This line enables the simple Token box
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
 from src.config import settings
 from src.prisma.database import get_db
 from bson import ObjectId
@@ -26,11 +26,10 @@ class AuthService:
         return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
     def generate_random_token(self):
-        """Generates a secure random token for verification/reset flows"""
         return secrets.token_urlsafe(32)
 
     async def get_current_user(self, token_obj: HTTPAuthorizationCredentials = Depends(security)):
-        token = token_obj.credentials
+        token = token_obj.credentials 
         try:
             payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
             user_id: str = payload.get("sub")
