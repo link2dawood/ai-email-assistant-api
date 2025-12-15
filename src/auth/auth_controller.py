@@ -18,7 +18,7 @@ router = APIRouter()
 @router.get("/google")
 async def google_login():
     """Generates the Google OAuth link using the URI from .env"""
-    scope = "openid email profile https://www.googleapis.com/auth/gmail.readonly"
+    scope = "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.send"
     
     # This uses the GOOGLE_REDIRECT_URI set in your .env file
     auth_url = (
@@ -32,41 +32,90 @@ async def google_login():
     )
     return {"auth_url": auth_url}
 
+import httpx
+
+# ...
+
 @router.post("/google/callback")
 async def google_callback(payload: dict):
     """
     Receives the code from Frontend and swaps it for a token.
-    IMPORTANT: We must use the SAME redirect_uri used to generate the link.
+    Then fetches real user info from Google.
     """
     code = payload.get("code")
     if not code:
         raise HTTPException(status_code=400, detail="Code is required")
 
-    # MOCK LOGIN for MVP (Replace with real Google Token Exchange later)
-    # Since we can't easily swap tokens without a real library setup, 
-    # we assume if we got a code, the user authenticated on the frontend.
-    
-    # In a real production app, you would use `requests.post` to google here.
-    
-    mock_email = "google_user_mvp@example.com"
+    # 1. Exchange Code for Token
+    token_url = "https://oauth2.googleapis.com/token"
+    token_data = {
+        "client_id": settings.google_client_id,
+        "client_secret": settings.google_client_secret,
+        "code": code,
+        "grant_type": "authorization_code",
+        "redirect_uri": settings.google_redirect_uri,
+    }
+
+    async with httpx.AsyncClient() as client:
+        token_res = await client.post(token_url, data=token_data)
+        
+    if token_res.status_code != 200:
+        logger.error(f"Google Token Error: {token_res.text}")
+        raise HTTPException(status_code=400, detail="Failed to retrieve Google token")
+
+    tokens = token_res.json()
+    access_token = tokens.get("access_token")
+    # id_token_val = tokens.get("id_token") # You can verify this if needed
+
+    # 2. Fetch User Info
+    user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+    async with httpx.AsyncClient() as client:
+        user_res = await client.get(user_info_url, headers={"Authorization": f"Bearer {access_token}"})
+
+    if user_res.status_code != 200:
+        logger.error(f"Google User Info Error: {user_res.text}")
+        raise HTTPException(status_code=400, detail="Failed to fetch Google user info")
+
+    google_user = user_res.json()
+    email = google_user.get("email")
+    name = google_user.get("name")
+    picture = google_user.get("picture")
+    google_id = google_user.get("id")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account has no email")
+
+    # 3. Find or Create User in DB
     db = get_db()
     
-    # Find or Create User
-    user = await db.users.find_one({"email": mock_email})
+    user = await db.users.find_one({"email": email})
+    
     if not user:
         new_user = {
-            "email": mock_email,
-            "name": "Google User",
+            "email": email,
+            "name": name,
+            "picture": picture,
             "created_at": datetime.utcnow(),
-            "google_id": "mvp_google_id",
+            "google_id": google_id,
+            "google_access_token": access_token, # Store token for functionality
             "plan": "free"
         }
         res = await db.users.insert_one(new_user)
         user_id = str(res.inserted_id)
     else:
+        # Update existing user with latest info (optional but good)
         user_id = str(user["_id"])
+        await db.users.update_one(
+            {"_id": user["_id"]},
+            {"$set": {
+                "google_id": google_id, 
+                "picture": picture, 
+                "name": name,
+                "google_access_token": access_token # Update token on login
+            }}
+        )
 
-    # Generate JWT
+    # 4. Generate App JWT
     token = auth_service.create_access_token({"sub": user_id})
     return {"access_token": token, "token_type": "bearer"}
 
@@ -108,6 +157,17 @@ async def signin(creds: UserLogin):
     
     token = auth_service.create_access_token({"sub": str(user["_id"])})
     return {"access_token": token, "token_type": "bearer"}
+
+@router.get("/me")
+async def get_current_user(user = Depends(auth_service.get_current_user)):
+    """Return the current authenticated user"""
+    return {
+        "id": str(user["_id"]),
+        "name": user.get("name"),
+        "email": user["email"],
+        "plan": user.get("plan", "free"),
+        "picture": user.get("picture") # If available from Google
+    }
 
 @router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):

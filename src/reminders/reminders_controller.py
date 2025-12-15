@@ -12,8 +12,6 @@ async def get_reminders(user = Depends(auth_service.get_current_user)):
     reminders = await db.reminders.find({"user_id": user["_id"]}).to_list(length=100)
     for r in reminders:
         r["id"] = str(r.pop("_id"))
-    return reminders
-
 @router.post("/")
 async def create_reminder(req: ReminderCreate, user = Depends(auth_service.get_current_user)):
     db = get_db()
@@ -23,3 +21,12 @@ async def create_reminder(req: ReminderCreate, user = Depends(auth_service.get_c
     data["is_completed"] = False
     res = await db.reminders.insert_one(data)
     return {"id": str(res.inserted_id), "message": "Reminder set"}
+
+@router.get("/stats")
+async def get_stats(user = Depends(auth_service.get_current_user)):
+    db = get_db()
+    count = await db.reminders.count_documents({
+        "user_id": user["_id"],
+        "is_completed": False
+    })
+    return {"reminders": count}
