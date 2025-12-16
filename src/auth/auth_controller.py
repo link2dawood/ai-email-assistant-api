@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import datetime, timedelta
 from src.prisma.models import (
-    UserCreate, UserLogin, SocialSigninRequest, 
+    UserCreate, UserLogin, UserUpdate, SocialSigninRequest, 
     ForgotPasswordRequest, ResetPasswordRequest
 )
 from src.auth.auth_service import auth_service
@@ -18,18 +18,22 @@ router = APIRouter()
 @router.get("/google")
 async def google_login():
     """Generates the Google OAuth link using the URI from .env"""
+    import urllib.parse
+    
     scope = "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.send"
     
-    # This uses the GOOGLE_REDIRECT_URI set in your .env file
-    auth_url = (
-        f"https://accounts.google.com/o/oauth2/v2/auth?"
-        f"client_id={settings.google_client_id}&"
-        f"redirect_uri={settings.google_redirect_uri}&"
-        f"response_type=code&"
-        f"scope={scope}&"
-        f"access_type=offline&"
-        f"prompt=consent"
-    )
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": settings.google_redirect_uri,
+        "response_type": "code",
+        "scope": scope,
+        "access_type": "offline",
+        "prompt": "consent"
+    }
+    
+    query_string = urllib.parse.urlencode(params)
+    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{query_string}"
+    
     return {"auth_url": auth_url}
 
 import httpx
@@ -168,6 +172,30 @@ async def get_current_user(user = Depends(auth_service.get_current_user)):
         "plan": user.get("plan", "free"),
         "picture": user.get("picture") # If available from Google
     }
+
+@router.put("/me")
+async def update_current_user(
+    update_data: UserUpdate,
+    user = Depends(auth_service.get_current_user)
+):
+    """Update displayed name or picture"""
+    db = get_db()
+    
+    update_fields = {}
+    if update_data.name is not None:
+        update_fields["name"] = update_data.name
+    if update_data.picture is not None:
+        update_fields["picture"] = update_data.picture
+        
+    if not update_fields:
+        return {"message": "No changes provided"}
+        
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": update_fields}
+    )
+    
+    return {"message": "Profile updated successfully"}
 
 @router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):

@@ -19,6 +19,10 @@ class UserCreate(BaseModel):
     password: str
     name: Optional[str] = None
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    picture: Optional[str] = None
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str

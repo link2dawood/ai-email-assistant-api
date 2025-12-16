@@ -12,7 +12,8 @@ class EmailService:
         return str(res.inserted_id)
 
     async def get_emails(self, user_id, limit=20):
-        cursor = get_db().emails.find({"user_id": user_id}).limit(limit)
+        # Sort by _id desc (newest first)
+        cursor = get_db().emails.find({"user_id": user_id}).sort("_id", -1).limit(limit)
         emails = await cursor.to_list(length=limit)
         # Convert ObjectId to str for response
         for email in emails:
