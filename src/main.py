@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Email Assistant API",
     lifespan=lifespan,
-    # docs_url=f"{settings.api_prefix}/docs"  <-- REMOVE THIS LINE
+    redirect_slashes=False  # Prevent automatic redirects that cause CORS issues
 )
 
 # CORS Middleware

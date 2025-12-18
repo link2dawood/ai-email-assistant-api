@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     # ============ CORS ============
     cors_origins: List[str] = [
         "http://localhost:3000",
+        "http://127.0.0.1:3000",  # Allow IP address as well
         "http://localhost:5173",
         "http://localhost:8000"
     ]

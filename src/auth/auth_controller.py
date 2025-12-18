@@ -69,7 +69,11 @@ async def google_callback(payload: dict):
 
     tokens = token_res.json()
     access_token = tokens.get("access_token")
-    # id_token_val = tokens.get("id_token") # You can verify this if needed
+    refresh_token = tokens.get("refresh_token")  # Get refresh token for long-term access
+    expires_in = tokens.get("expires_in", 3600)  # Default to 1 hour if not provided
+    
+    # Calculate token expiration time
+    token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
 
     # 2. Fetch User Info
     user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
@@ -94,6 +98,14 @@ async def google_callback(payload: dict):
     
     user = await db.users.find_one({"email": email})
     
+    # Prepare token data (only update refresh_token if we received one)
+    token_data = {
+        "google_access_token": access_token,
+        "token_expires_at": token_expires_at
+    }
+    if refresh_token:
+        token_data["google_refresh_token"] = refresh_token
+    
     if not user:
         new_user = {
             "email": email,
@@ -101,13 +113,13 @@ async def google_callback(payload: dict):
             "picture": picture,
             "created_at": datetime.utcnow(),
             "google_id": google_id,
-            "google_access_token": access_token, # Store token for functionality
-            "plan": "free"
+            "plan": "free",
+            **token_data
         }
         res = await db.users.insert_one(new_user)
         user_id = str(res.inserted_id)
     else:
-        # Update existing user with latest info (optional but good)
+        # Update existing user with latest info
         user_id = str(user["_id"])
         await db.users.update_one(
             {"_id": user["_id"]},
@@ -115,7 +127,7 @@ async def google_callback(payload: dict):
                 "google_id": google_id, 
                 "picture": picture, 
                 "name": name,
-                "google_access_token": access_token # Update token on login
+                **token_data
             }}
         )
 
