@@ -211,6 +211,8 @@ async def update_current_user(
 
 @router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
+    from src.services.email_service import email_service
+    
     db = get_db()
     user = await db.users.find_one({"email": request.email})
     if not user:
@@ -230,13 +232,18 @@ async def forgot_password(request: ForgotPasswordRequest):
         }}
     )
 
-    # Mock Email Sending
-    # In production, use aiosmtplib to send real email
-    reset_link = f"http://localhost:3000/reset-password?token={reset_token}"
-    logger.info(f"============ PASSWORD RESET LINK ============")
-    logger.info(f"To: {request.email}")
-    logger.info(f"Link: {reset_link}")
-    logger.info(f"============================================")
+    # Send password reset email
+    reset_link = f"http://localhost:3000/auth/reset-password?token={reset_token}"
+    
+    try:
+        await email_service.send_password_reset_email(request.email, reset_link)
+    except Exception as e:
+        logger.error(f"Failed to send password reset email: {str(e)}")
+        # Still log to console as fallback
+        logger.info(f"============ PASSWORD RESET LINK ============")
+        logger.info(f"To: {request.email}")
+        logger.info(f"Link: {reset_link}")
+        logger.info(f"============================================")
 
     return {"message": "If the email exists, a reset link has been sent."}
 

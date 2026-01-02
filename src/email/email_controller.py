@@ -6,9 +6,8 @@ from src.prisma.models import EmailCreate
 
 router = APIRouter()
 
-# Support both with and without trailing slash
+# List all emails for the current user
 @router.get("/")
-@router.get("")
 async def list_emails(current_user = Depends(auth_service.get_current_user)):
     return await email_service.get_emails(current_user["_id"])
 

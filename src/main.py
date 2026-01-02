@@ -1,6 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
 
 # ---------------------------------------------------------
@@ -37,6 +38,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Root endpoint - redirect to Swagger UI
+@app.get("/")
+async def root():
+    """Redirect to Swagger UI documentation"""
+    return RedirectResponse(url="/docs")
 
 # Include the main application router
 app.include_router(api_router, prefix=settings.api_prefix)
