@@ -30,10 +30,10 @@ app = FastAPI(
     redirect_slashes=False  # Prevent automatic redirects that cause CORS issues
 )
 
-# CORS Middleware
+# CORS Middleware - Allow localhost and 127.0.0.1 with any port for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",  # Allow localhost and 127.0.0.1 with any port
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
