@@ -48,12 +48,45 @@ async def sync_gmail(current_user = Depends(auth_service.get_current_user)):
 async def get_stats(user = Depends(auth_service.get_current_user)):
     """
     Return statistics for the sidebar.
-    For MVP/Mock, we return 0s to avoid hardcoded fake numbers.
-    In future, this should fetch real counts from Gmail API.
+    Returns real counts from the database.
     """
-    return {
-        "inbox": 0,
-        "purchases": 0,
-        "spam": 0,
-        "trash": 0
-    }
+    from src.prisma.database import get_db
+    db = get_db()
+    
+    try:
+        # Count emails in different folders
+        inbox_count = await db.emails.count_documents({
+            "user_id": user["_id"],
+            "folder": "inbox",
+            "is_read": False
+        })
+        
+        purchases_count = await db.emails.count_documents({
+            "user_id": user["_id"],
+            "ai_category": "Purchases"
+        })
+        
+        spam_count = await db.emails.count_documents({
+            "user_id": user["_id"],
+            "folder": "spam"
+        })
+        
+        trash_count = await db.emails.count_documents({
+            "user_id": user["_id"],
+            "folder": "trash"
+        })
+        
+        return {
+            "inbox": inbox_count,
+            "purchases": purchases_count,
+            "spam": spam_count,
+            "trash": trash_count
+        }
+    except Exception as e:
+        # Return zeros on error to avoid breaking the UI
+        return {
+            "inbox": 0,
+            "purchases": 0,
+            "spam": 0,
+            "trash": 0
+        }
